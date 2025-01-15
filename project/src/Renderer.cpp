@@ -38,8 +38,8 @@ namespace dae {
 			{
 				"resources/vehicle_diffuse.png",
 				"resources/vehicle_normal.png",
-				"resources/vehicle_gloss.png",
 				"resources/vehicle_specular.png",
+				"resources/vehicle_gloss.png",
 			};
 
 			m_pMesh = new Mesh
@@ -60,7 +60,7 @@ namespace dae {
 		}
 
 		m_Camera = new Camera{};
-		m_Camera->Initialize(45.f, { 0,0,-100.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
+		m_Camera->Initialize(45.f, { 0,0,-40.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
 
 	}
 
@@ -88,6 +88,7 @@ namespace dae {
 	void Renderer::Update(const dae::Timer* pTimer)
 	{
 		m_Camera->Update(pTimer);
+		RotateMesh(pTimer->GetElapsed());
 	}
 
 
@@ -301,20 +302,19 @@ namespace dae {
 
 		Vector3 normal{};
 		Vector3 tangent{};
-		Vector3 position{};
+		Vector3 viewDirection{};
 
 		for (int index{ 0 }; index < vertices_ndc.size(); ++index)
 		{
 			normal += vertices_ndc[index].normal * weights[index];
 			tangent += vertices_ndc[index].tangent * weights[index];
-			position += vertices_ndc[index].position * weights[index];
+			viewDirection += vertices_ndc[index].viewDirection * weights[index];
 		}
 
 		const ColorRGB sampledColor{ m_pMesh->GetDiffuseMap()->Sample(caculated_uv) };
-		const Vector3 viewDirection{ (position - m_Camera->origin).Normalized() };
-		const Vertex_Out pixelVertex{ {},caculated_uv,normal,tangent };
+		const Vertex_Out pixelVertex{ {},caculated_uv,normal.Normalized(),tangent.Normalized()};
 
-		finalColor = PixelShading(pixelVertex,viewDirection,sampledColor,pMesh);
+		finalColor = PixelShading(pixelVertex,viewDirection.Normalized(), sampledColor, pMesh);
 
 		finalColor.MaxToOne();
 
@@ -325,27 +325,26 @@ namespace dae {
 
 	}
 
-	ColorRGB Renderer::PixelShading(const Vertex_Out& vertex,const Vector3& vieDirection, const ColorRGB& sampledColor, const Mesh* pMesh) const
-	{
-		Vector3 normal{ vertex.normal };
-		const Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
-		const Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
-		const ColorRGB sampledNormal{ pMesh->GetNormalMap()->Sample(vertex.uv) };
+		ColorRGB Renderer::PixelShading(const Vertex_Out& vertex,const Vector3& viewDirection, const ColorRGB& sampledColor, const Mesh* pMesh) const
+		{
+			Vector3 normal{ vertex.normal };
+			const Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
+			const Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
+			const ColorRGB sampledNormal{ pMesh->GetNormalMap()->Sample(vertex.uv) / 255.f };
 
-		Vector3 caculatedNormal{ sampledNormal.r, sampledNormal.g, sampledNormal.b };
-		caculatedNormal /= 255.f;
-		caculatedNormal = 2.f * caculatedNormal - Vector3{ 1.f, 1.f, 1.f };
+			Vector3 caculatedNormal{ sampledNormal.r, sampledNormal.g, sampledNormal.b };
+			caculatedNormal = 2.f * caculatedNormal - Vector3{ 1.f, 1.f, 1.f };
 
-		Vector3 transformedNormal{ tangentSpaceAxis.TransformVector(caculatedNormal) };
-		transformedNormal.Normalize();
-		normal = transformedNormal;
+			Vector3 transformedNormal{ tangentSpaceAxis.TransformVector(caculatedNormal) };
+			transformedNormal.Normalize();
+			normal = transformedNormal;
 
 
-		const float observedArea{ std::max(Vector3::Dot(normal, m_InvLightDirection), 0.f) };
-		const ColorRGB lambert{ GetDiffuse(sampledColor) };
-		const ColorRGB specular{ GetSpecular(vertex,normal,vieDirection,pMesh) };
-		return ((lambert * observedArea) + specular) / 255.f;
-	}
+			const float observedArea{ std::max(Vector3::Dot(normal, m_InvLightDirection), 0.f) };
+			const ColorRGB lambert{ GetDiffuse(sampledColor) };
+			const ColorRGB specular{ GetSpecular(vertex,normal,viewDirection,pMesh) };
+			return ((lambert * observedArea) / 255.f) + specular;
+		}
 
 	void Renderer::ExtractFrustumPlanes(const Matrix& viewProjectionMatrix, Frustum& frustum) const
 	{
@@ -422,6 +421,8 @@ namespace dae {
 				culling = true;
 			}
 
+			
+
 			// Convert to screen space
 			Vertex_Out newVertex;
 			newVertex.position.x = ((transformedPosition.x + 1) / 2) * m_Width;  // Screen space X
@@ -429,10 +430,12 @@ namespace dae {
 			newVertex.position.z = transformedPosition.z;                       // NDC Depth (0 to 1)
 			newVertex.position.w = transformedPosition.w;
 
+			newVertex.viewDirection = (worldMatrix.TransformPoint(vertex.position) - m_Camera->origin).Normalized();
+
 			// Pass additional attributes (UVs, color, etc.)
 			newVertex.uv = vertex.uv;
-			newVertex.normal = worldMatrix.TransformVector(vertex.normal);
-			newVertex.tangent = worldMatrix.TransformVector(vertex.tangent);
+			newVertex.normal = worldMatrix.TransformVector(vertex.normal).Normalized();
+			newVertex.tangent = worldMatrix.TransformVector(vertex.tangent).Normalized();
 
 
 			vertices_out.emplace_back(newVertex);
@@ -441,19 +444,27 @@ namespace dae {
 
 	ColorRGB Renderer::GetDiffuse(const ColorRGB& sampledColor) const
 	{
-		return ((m_KD * sampledColor) / M_PI);
+		return ((m_LightIntensity * sampledColor) / M_PI);
 	}
 
 	ColorRGB Renderer::GetSpecular(const Vertex_Out& vertex, const Vector3& normal,const Vector3& viewDirection, const Mesh* pMesh) const
 	{
-		const float glossiness{ std::fmax(0.0f, pMesh->GetGlossinessMap()->Sample(vertex.uv).r)};
-		ColorRGB specularColor{ pMesh->GetSpecularMap()->Sample(vertex.uv) * m_Shininess};
+		ColorRGB gloss{ pMesh->GetGlossinessMap()->Sample(vertex.uv) /255.f };
+		const float glossiness{ gloss.r * m_Shininess};
+		ColorRGB specularColor{ pMesh->GetSpecularMap()->Sample(vertex.uv) / 255.f};
 
-		const Vector3 reflect{ (m_InvLightDirection - 2.f * Vector3::Dot(m_InvLightDirection, normal) * normal).Normalized() };
-		const float angle{ std::fmax(0.0f, Vector3::Dot(reflect, viewDirection.Normalized())) };
-		const float specReflection{ m_KS * powf(angle, glossiness) };
+		const float dot{ Vector3::Dot(m_InvLightDirection, normal) };
+		const Vector3 reflect{ (m_InvLightDirection - (2.f * std::max(dot,0.f) * normal)) };
+		const float angle{ std::max(Vector3::Dot(viewDirection,reflect),0.f) };
+
+		const float specReflection{ std::pow(angle, glossiness) };
 
 		return specularColor * specReflection;
+	}
+
+	void Renderer::RotateMesh(float elapsedSec)
+	{
+		m_pMesh->WorldMatrix *= Matrix::CreateRotationY(elapsedSec);
 	}
 
 	HRESULT Renderer::InitializeDirectX()

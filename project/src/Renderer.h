@@ -55,6 +55,7 @@ namespace dae
 		ColorRGB GetDiffuse(const ColorRGB& sampledColor) const;
 		ColorRGB GetSpecular(const Vertex_Out& vertex, const Vector3& normal, const Vector3& viewDirection, const Mesh* pMesh) const;
 
+		void RotateMesh(float elapsedSec);
 
 		SDL_Window* m_pWindow{};
 
@@ -84,9 +85,9 @@ namespace dae
 
 		float* m_pDepthBufferPixels{ nullptr };
 
-		const dae::Vector3 m_InvLightDirection{ -0.577f, 0.577f, 0.577f };
+		const dae::Vector3 m_InvLightDirection{ -0.577f, 0.577f, -0.577f };
 		const float m_KS{ .5f };
-		const float m_KD{ 7.f };
+		const float m_LightIntensity{ 7.f };
 		const float m_Shininess{ 25.f };
 
 		Mesh* m_pMesh;

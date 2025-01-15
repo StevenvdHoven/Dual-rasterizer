@@ -77,6 +77,7 @@ namespace dae
 		Vector2 uv{};
 		Vector3 normal{};
 		Vector3 tangent{};
+		Vector3 viewDirection{};
 	};
 
 	enum class PrimitiveTopology
