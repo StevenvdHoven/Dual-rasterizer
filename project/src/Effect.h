@@ -13,7 +13,7 @@ class Effect
 {
 public:
 
-	enum class TextureTechnique
+	enum class SampleState
 	{
 		Point,
 		Linear,
@@ -25,6 +25,8 @@ public:
 
 	ID3DX11EffectTechnique* GetTechnique() const;
 	ID3D11InputLayout* GetInputLayout() const;
+
+	void SetTechnique(SampleState technique);
 
 	void SetDiffuseMap(const dae::Texture* pDiffuseTexture) const;
 	void SetNormalMap(const dae::Texture* pNormalMapTexture) const;
@@ -55,7 +57,7 @@ private:
 
 	uint32_t m_NumIndices;
 
-	TextureTechnique m_TechniqueMode;
+	SampleState m_TechniqueMode;
 
 };
 

@@ -4,10 +4,10 @@
 #include "Utils.h"
 #include "Texture.h"
 #include "DataTypes.h"
-#include "DataTypes.h"
+#include "Effect.h"
+
 
 class ID3D11Device;
-class Effect;
 struct Matrix;
 
 
@@ -20,6 +20,7 @@ public:
 	void Render_DirectX(ID3D11DeviceContext* pDeviceContext, dae::Camera* camera);
 	//void Render_Software(float aspectRatio, float width, float height, dae::Camera* pCamera, const dae::Frustum& frustum, SDL_Surface* pBackBuffer, uint32_t* pBackBufferPixels, float* pDepthBufferArr);
 
+	void SetSamplerState(Effect::SampleState samplerState);
 
 	dae::Texture* GetDiffuseMap() const;
 	dae::Texture* GetNormalMap() const;
@@ -32,18 +33,6 @@ public:
 	std::vector<dae::Vertex_In> m_Vertices{};
 	std::vector<uint32_t> m_Indices{};
 private:
-	//Software
-	//void RenderTriangle(float width, float height, dae::Camera* pCamera, const std::vector<dae::Vertex_Out>& vertices_ndc, SDL_Surface* pBackBuffer, uint32_t* pBackBufferPixels, float* pDepthBufferArr);
-	//void PixelTriangleTest(uint32_t pixelIndex, float width, float height, dae::Camera* pCamera, const std::vector<dae::Vertex_Out>& vertices_ndc, const dae::Vector3& up, SDL_Surface* pBackBuffer, uint32_t* pBackBufferPixels, float* pDepthBufferArr, const float& area, float minX, float minY, float maxX, float maxY, float* weights);
-	//dae::ColorRGB PixelShading(const dae::Vertex_Out& vertex, const dae::Vector3& viewDirection, const dae::ColorRGB& sampledColor);
-
-	//void VertexTransformationFunction(float aspectRatio, float width, float height, const dae::Frustum& frustum, const std::vector<dae::Vertex_In>& vertices_in, std::vector<dae::Vertex_Out>& vertices_out, bool& culling, const dae::Matrix& worldViewProjection) const;
-
-	
-
-	//dae::ColorRGB GetDiffuse(const dae::ColorRGB& sampledColor);
-	//dae::ColorRGB GetSpecular(const dae::Vertex_Out& vertex, const dae::Vector3& normal, dae::Vector3 viewDirection);
-
 
 	// DirectX
 	Effect* m_pEffect;
@@ -58,6 +47,5 @@ private:
 
 	uint32_t m_NumIndices;
 
-	
 };
 

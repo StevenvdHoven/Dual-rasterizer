@@ -155,6 +155,11 @@ void Mesh::Render_DirectX(ID3D11DeviceContext* pDeviceContext, dae::Camera* came
 //		});
 //}
 
+void Mesh::SetSamplerState(Effect::SampleState samplerState)
+{
+	m_pEffect->SetTechnique(samplerState);
+}
+
 dae::Texture* Mesh::GetDiffuseMap() const
 {
 	return m_pDiffuseMap.get();

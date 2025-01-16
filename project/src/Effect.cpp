@@ -125,6 +125,25 @@ ID3D11InputLayout* Effect::GetInputLayout() const
 	return m_pInputLayout;
 }
 
+void Effect::SetTechnique(SampleState technique)
+{
+	switch (technique)
+	{
+	case Effect::SampleState::Point:
+		m_pTechnique = m_PointTechnique;
+		break;
+	case Effect::SampleState::Linear:
+		m_pTechnique = m_LinearTechnique;
+		break;
+	case Effect::SampleState::Anisotropic:
+		m_pTechnique = m_AnisotropicTechnique;
+		break;
+	default:
+		break;
+	}
+
+}
+
 void Effect::SetDiffuseMap(const dae::Texture* pDiffuseTexture) const
 {
 	if (m_pDiffuseMapVariable)

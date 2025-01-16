@@ -7,10 +7,10 @@
 #include <d3dcompiler.h>
 #include <d3dx11effect.h>
 #include "DataTypes.h"
+#include "Effect.h"
 
 struct SDL_Window;
 struct SDL_Surface;
-class Effect;
 class Mesh;
 class Camera;
 
@@ -20,6 +20,21 @@ namespace dae
 	{
 		DirectX,
 		Software
+	};
+
+	enum CullMode
+	{
+		Back,
+		Front,
+		None
+	};
+
+	enum ShadingMode
+	{
+		Combined,
+		Observed,
+		Diffuse,
+		Specular
 	};
 
 	class Renderer final
@@ -34,20 +49,33 @@ namespace dae
 		Renderer& operator=(Renderer&&) noexcept = delete;
 
 		void Update(const Timer* pTimer);
-		void Render() const;
+		void Render();
 
-		void Render_DirectX() const;
-		void Render_Software() const;
+		void Render_DirectX();
+		void Render_Software();
 
 		void ToggleRenderMethod();
+		void ToggleVehicleRotation();
+		void CycleCullMode();
+		void ToggleUniformClearColor();
+
+		void ToggleFireEffect();
+		void CycleSamplerState();
+
+		void CycleShadingMode();
+		void ToggleNormalMap();
+		void ToggleDepthBuffer();
+		void ToggleBoundingBox();
+		
 
 	private:
+#pragma region Software Rendering
 		//Software
-		void RenderMesh(Mesh* mesh) const;
-		void RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh) const;
-		void PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const Vector3& up, const float& area, float minX, float minY, float maxX, float maxY, float* weights) const;
+		void RenderMesh(Mesh* mesh);
+		void RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh);
+		void PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const Vector3& up, const float& area, float minX, float minY, float maxX, float maxY, float* weights);
 
-		ColorRGB PixelShading(const Vertex_Out& vertex, const Vector3& vieDirection, const ColorRGB& sampledColor, const Mesh* pMesh) const;
+		ColorRGB PixelShading(const Vertex_Out& vertex, const Vector3& vieDirection, const ColorRGB& sampledColor, const Mesh* pMesh);
 		void ExtractFrustumPlanes(const dae::Matrix& viewProjectionMatrix, dae::Frustum& frustum) const;
 
 		void VertexTransformationFunction(const std::vector<Vertex_In>& vertices_in, std::vector<Vertex_Out>& vertices_out, bool& culling, const Matrix& worldMatrix) const;
@@ -55,7 +83,11 @@ namespace dae
 		ColorRGB GetDiffuse(const ColorRGB& sampledColor) const;
 		ColorRGB GetSpecular(const Vertex_Out& vertex, const Vector3& normal, const Vector3& viewDirection, const Mesh* pMesh) const;
 
+#pragma endregion
+
 		void RotateMesh(float elapsedSec);
+		void PrintOutKeys();
+		float Remap(float value, float min, float max) const;
 
 		SDL_Window* m_pWindow{};
 
@@ -63,7 +95,23 @@ namespace dae
 		int m_Height{};
 
 		bool m_IsInitialized{ false };
+		
+		//Shared Settings
 		RenderMethod m_RenderMethod{RenderMethod::Software};
+		bool m_VehicleRotation{ true };
+		CullMode m_CullMode{ CullMode::Back };
+		bool m_ClearColor{ true };
+
+		//DirectX Settings
+		bool m_RenderFireFX{ true };
+		Effect::SampleState m_SampleState{ Effect::SampleState::Point };
+
+		//Software Settings
+		ShadingMode m_ShadingMode{ ShadingMode::Combined };
+		bool m_UseNormalMap{ true };
+		bool m_RenderDepthBuffer{ false };
+		bool m_RenderBoundingBox{ false };
+
 
 		//DIRECTX
 		HRESULT InitializeDirectX();
@@ -84,6 +132,9 @@ namespace dae
 		uint32_t* m_pBackBufferPixels{};
 
 		float* m_pDepthBufferPixels{ nullptr };
+		float m_MinDepth{ 0.f };
+		float m_MaxDepth{ 0.f };
+
 
 		const dae::Vector3 m_InvLightDirection{ -0.577f, 0.577f, -0.577f };
 		const float m_KS{ .5f };

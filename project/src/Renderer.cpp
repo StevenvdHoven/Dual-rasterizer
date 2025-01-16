@@ -30,8 +30,14 @@ namespace dae {
 			m_IsInitialized = true;
 
 			std::vector<Vertex_In> vertices;
+			/*std::vector<Vertex_In> vertices{
+				{{0,0,0}},
+				{{0,10,0}},
+				{{-10,10,0}},
+				{{-10,0,0}},
+			};*/
 			std::vector<uint32_t> indices;
-
+			/*std::vector<uint32_t> indices{ 0,1,2,3,0,2 };*/
 			Utils::ParseOBJ("resources/vehicle.obj", vertices, indices);
 
 			std::string texturePaths[4]
@@ -62,6 +68,7 @@ namespace dae {
 		m_Camera = new Camera{};
 		m_Camera->Initialize(45.f, { 0,0,-40.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
 
+		PrintOutKeys();
 	}
 
 	Renderer::~Renderer()
@@ -92,7 +99,7 @@ namespace dae {
 	}
 
 
-	void Renderer::Render() const
+	void Renderer::Render()
 	{
 		if (m_RenderMethod == DirectX)
 		{
@@ -104,7 +111,7 @@ namespace dae {
 		}
 	}
 
-	void Renderer::Render_DirectX() const
+	void Renderer::Render_DirectX()
 	{
 		if (!m_IsInitialized)
 			return;
@@ -119,7 +126,7 @@ namespace dae {
 		m_pSwapChain->Present(0, 0);
 	}
 
-	void Renderer::Render_Software() const
+	void Renderer::Render_Software()
 	{
 		SDL_LockSurface(m_pBackBuffer);
 
@@ -147,6 +154,33 @@ namespace dae {
 
 		RenderMesh(m_pMesh);
 
+		if (m_RenderDepthBuffer)
+		{
+			for (int x{ 0 }; x < m_Width; ++x)
+			{
+				for (int y{ 0 }; y < m_Height; ++y)
+				{
+					const int pixel{ x + (y * m_Width) };
+					const float depthValue{ m_pDepthBufferPixels[pixel] };
+
+					if (depthValue <= 1)
+					{
+						float remappedDepth = Remap(depthValue, m_MinDepth, m_MaxDepth);
+						ColorRGB finalColor{ remappedDepth, remappedDepth, remappedDepth };
+
+						finalColor.MaxToOne();
+						m_pBackBufferPixels[pixel] = SDL_MapRGB(m_pBackBuffer->format,
+							static_cast<uint8_t>(finalColor.r * 255),
+							static_cast<uint8_t>(finalColor.g * 255),
+							static_cast<uint8_t>(finalColor.b * 255));
+					}
+				}
+			}
+
+			m_MinDepth = FLT_MAX;
+			m_MaxDepth = 0;
+		}
+
 		for (int px{ 0 }; px < m_Width; ++px)
 		{
 			for (int py{ 0 }; py < m_Height; ++py)
@@ -154,7 +188,7 @@ namespace dae {
 				m_pDepthBufferPixels[px + (py * m_Width)] = FLT_MAX;
 			}
 		}
-	
+
 
 		SDL_UnlockSurface(m_pBackBuffer);
 		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
@@ -163,62 +197,277 @@ namespace dae {
 
 	void Renderer::ToggleRenderMethod()
 	{
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 6);
 		if (m_RenderMethod == DirectX)
 		{
 			m_RenderMethod = Software;
+			std::cout << "**Rasterizer = SOFTWARE**" << std::endl;
+
 		}
 		else
 		{
 			m_RenderMethod = DirectX;
+			std::cout << "**Rasterizer = HARDWARE**" << std::endl;
 		}
+		SetConsoleTextAttribute(hConsole, 15);
 	}
 
-	void Renderer::RenderMesh(Mesh* mesh) const
+	void Renderer::ToggleVehicleRotation()
+	{
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 6);
+		m_VehicleRotation = !m_VehicleRotation;
+		if (m_VehicleRotation)
+		{
+			std::cout << "**Vehicle Rotation = ON**" << std::endl;
+		}
+		else
+		{
+			std::cout << "**Vehicle Rotation = OFF**" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::CycleCullMode()
+	{
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 6);
+		switch (m_CullMode)
+		{
+		case dae::Back:
+			m_CullMode = Front;
+			std::cout << "**CullMode = Front**" << std::endl;
+
+			break;
+		case dae::Front:
+			m_CullMode = None;
+			std::cout << "**CullMode = None**" << std::endl;
+			break;
+		case dae::None:
+			m_CullMode = Back;
+			std::cout << "**CullMode = Back**" << std::endl;
+			break;
+		default:
+			break;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::ToggleUniformClearColor()
+	{
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 6);
+		m_ClearColor = !m_ClearColor;
+		if (m_ClearColor)
+		{
+			std::cout << "**ClearColor = ON**" << std::endl;
+		}
+		else
+		{
+			std::cout << "**ClearColor = OFF**" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::ToggleFireEffect()
+	{
+		if (m_RenderMethod != DirectX) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 2);
+		m_RenderFireFX = !m_RenderFireFX;
+		if (m_RenderFireFX)
+		{
+			std::cout << "**Fire Effect = ON**" << std::endl;
+		}
+		else
+		{
+			std::cout << "**Fire Effect = OFF**" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::CycleSamplerState()
+	{
+		if (m_RenderMethod != DirectX) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 2);
+		switch (m_SampleState)
+		{
+		case Effect::SampleState::Point:
+			m_SampleState = Effect::SampleState::Linear;
+			std::cout << "**SamplerState = LINEAR**" << std::endl;
+			break;
+		case Effect::SampleState::Linear:
+			m_SampleState = Effect::SampleState::Anisotropic;
+			std::cout << "**SamplerState = ANISOTROPIC**" << std::endl;
+			break;
+		case Effect::SampleState::Anisotropic:
+			m_SampleState = Effect::SampleState::Point;
+			std::cout << "**SamplerState = POINT**" << std::endl;
+			break;
+		default:
+			break;
+		}
+
+		m_pMesh->SetSamplerState(m_SampleState);
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::CycleShadingMode()
+	{
+		if (m_RenderMethod != Software) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 5);
+		switch (m_ShadingMode)
+		{
+		case dae::Combined:
+			m_ShadingMode = Observed;
+			std::cout << "**ShadingMode = OBSERVED_AREA**" << std::endl;
+			break;
+		case dae::Observed:
+			m_ShadingMode = Diffuse;
+			std::cout << "**ShadingMode = DIFFUSE**" << std::endl;
+			break;
+		case dae::Diffuse:
+			m_ShadingMode = Specular;
+			std::cout << "**ShadingMode = SPECULAR**" << std::endl;
+			break;
+		case dae::Specular:
+			m_ShadingMode = Combined;
+			std::cout << "**ShadingMode = COMBINED**" << std::endl;
+			break;
+		default:
+			break;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::ToggleNormalMap()
+	{
+		if (m_RenderMethod != Software) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 5);
+		m_UseNormalMap = !m_UseNormalMap;
+		if (m_UseNormalMap)
+		{
+			std::cout << "**NormalMap = ON" << std::endl;
+		}
+		else
+		{
+			std::cout << "**NormalMap = OFF" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::ToggleDepthBuffer()
+	{
+		if (m_RenderMethod != Software) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 5);
+		m_RenderDepthBuffer = !m_RenderDepthBuffer;
+		if (m_RenderDepthBuffer)
+		{
+			std::cout << "**DepthBuffer = ON" << std::endl;
+		}
+		else
+		{
+			std::cout << "**DepthBuffer = OFF" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::ToggleBoundingBox()
+	{
+		if (m_RenderMethod != Software) return;
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, 5);
+		m_RenderBoundingBox = !m_RenderBoundingBox;
+		if (m_RenderBoundingBox)
+		{
+			std::cout << "**BoundingBox = ON" << std::endl;
+		}
+		else
+		{
+			std::cout << "**BoundingBox = OFF" << std::endl;
+		}
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	void Renderer::RenderMesh(Mesh* mesh)
 	{
 		std::vector<uint32_t> indices(3);
-			std::vector<dae::Triangle> triangles{};
-		
-			dae::Matrix view{ m_Camera->invViewMatrix };
-			dae::Matrix proj{ m_Camera->ProjectionMatrix };
-			const dae::Matrix worldViewProjectionMatrix{ mesh->WorldMatrix * view * proj };
-		
-			int increment = (mesh->m_PrimitiveTopology == dae::PrimitiveTopology::TriangleList) ? 3 : 1;
-			for (int indicesIndex = 0; indicesIndex < mesh->m_Indices.size() - 2; indicesIndex += increment)
+		std::vector<dae::Triangle> triangles{};
+
+		dae::Matrix view{ m_Camera->invViewMatrix };
+		dae::Matrix proj{ m_Camera->ProjectionMatrix };
+		const dae::Matrix worldViewProjectionMatrix{ mesh->WorldMatrix * view * proj };
+
+		int increment = (mesh->m_PrimitiveTopology == dae::PrimitiveTopology::TriangleList) ? 3 : 1;
+		for (int indicesIndex = 0; indicesIndex < mesh->m_Indices.size() - 2; indicesIndex += increment)
+		{
+			bool isOdd = (indicesIndex % 2) != 0 && mesh->m_PrimitiveTopology == dae::PrimitiveTopology::TriangleStrip;
+
+			// Calculate indices for current triangle
+			indices = {
+				mesh->m_Indices[indicesIndex],
+				mesh->m_Indices[indicesIndex + (isOdd ? 2 : 1)],
+				mesh->m_Indices[indicesIndex + (isOdd ? 1 : 2)],
+			};
+
+			// Skip degenerate triangles
+			if (indices[0] == indices[1] || indices[1] == indices[2] || indices[0] == indices[2]) continue;
+
+			// Prepare vertices
+			std::vector<dae::Vertex_Out> out;
+			std::vector<dae::Vertex_In> in{ mesh->m_Vertices[indices[0]], mesh->m_Vertices[indices[1]], mesh->m_Vertices[indices[2]] };
+
+			// Transform vertices and cull
+			bool culling{ false };
+
+
+			VertexTransformationFunction(in, out, culling, mesh->WorldMatrix);
+			if (culling || out.size() != 3) continue;
+
+			triangles.emplace_back(dae::Triangle{ out });
+		}
+
+		std::for_each(std::execution::par_unseq, triangles.begin(), triangles.end(), [&](dae::Triangle triangle)
 			{
-				bool isOdd = (indicesIndex % 2) != 0 && mesh->m_PrimitiveTopology == dae::PrimitiveTopology::TriangleStrip;
-		
-				// Calculate indices for current triangle
-				indices = {
-					mesh->m_Indices[indicesIndex],
-					mesh->m_Indices[indicesIndex + (isOdd ? 2 : 1)],
-					mesh->m_Indices[indicesIndex + (isOdd ? 1 : 2)],
-				};
-		
-				// Skip degenerate triangles
-				if (indices[0] == indices[1] || indices[1] == indices[2] || indices[0] == indices[2]) continue;
-		
-				// Prepare vertices
-				std::vector<dae::Vertex_Out> out;
-				std::vector<dae::Vertex_In> in{ mesh->m_Vertices[indices[0]], mesh->m_Vertices[indices[1]], mesh->m_Vertices[indices[2]] };
-		
-				// Transform vertices and cull
-				bool culling{ false };
-				
-		
-				VertexTransformationFunction(in,out,culling,mesh->WorldMatrix);
-				if (culling || out.size() != 3) continue;
-		
-				triangles.emplace_back(dae::Triangle{ out });
-			}
-		
-			std::for_each(std::execution::par_unseq, triangles.begin(), triangles.end(), [&](dae::Triangle triangle)
-				{
-					RenderTriangle(triangle.vertices,mesh);
-				});
+				RenderTriangle(triangle.vertices, mesh);
+			});
 	}
 
-	void Renderer::RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh) const
+	void Renderer::RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh)
 	{
+		//if (m_CullMode != None)
+		//{
+		//	// Calculate the triangle edges and normal
+		//	const Vector3 edge1 = vertices_ndc[1].position - vertices_ndc[0].position;
+		//	const Vector3 edge2 = vertices_ndc[2].position - vertices_ndc[0].position;
+		//	const Vector3 normal = Vector3::Cross(edge1, edge2).Normalized();
+
+		//	// Calculate the view direction
+		//	const Vector3 position{ vertices_ndc[0].position };
+		//	
+
+		//	// Dot product for back-face culling
+		//	const float dot = Vector3::Dot(normal, Vector3{0,0,-1});
+
+		//	// Perform culling
+		//	if ((m_CullMode == Back && dot > 0) || (m_CullMode == Front && dot < 0))
+		//	{
+		//		return; // Skip rasterization for the culled triangle
+		//	}
+		//}
+
+
 		const std::vector<float> xPositions{ vertices_ndc[0].position.x,vertices_ndc[1].position.x,vertices_ndc[2].position.x };
 		const std::vector<float> yPositions{ vertices_ndc[0].position.y,vertices_ndc[1].position.y,vertices_ndc[2].position.y };
 
@@ -232,9 +481,11 @@ namespace dae {
 		maxX = std::ceil(std::min((float)m_Width, maxX));
 		maxY = std::ceil(std::min((float)m_Height, maxY));
 
-		const Vector3 v0{ vertices_ndc[1].position - vertices_ndc[0].position };
-		const Vector3 v1{ vertices_ndc[2].position - vertices_ndc[0].position };
-		const float area{ std::fabs(Vector3::Cross(v0,v1).Magnitude()) * 0.5f };
+		const Vector2 v0{ vertices_ndc[1].position.GetXY() - vertices_ndc[0].position.GetXY()};
+		const Vector2 v1{ vertices_ndc[2].position.GetXY() - vertices_ndc[0].position.GetXY()};
+
+		const float area{ std::fabs(Vector2::Cross(v0,v1)) };
+
 		const Vector3 up{ 0,0,1 };
 
 		float weights[3]{};
@@ -244,12 +495,27 @@ namespace dae {
 			for (int py = static_cast<int>(minY); py < static_cast<int>(maxY); ++py)
 			{
 				uint32_t pixelIndex = px + py * m_Width;
-				PixelTriangleTest(pixelIndex, pMesh, vertices_ndc, up, area, minX, minY, maxX, maxY, weights);
+				if (!m_RenderBoundingBox)
+				{
+					PixelTriangleTest(pixelIndex, pMesh, vertices_ndc, up, area, minX, minY, maxX, maxY, weights);
+				}
+				else
+				{
+					ColorRGB finalColor{ 1,1,1 };
+
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[pixelIndex] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
+				}
+
 			}
 		}
 	}
 
-	void Renderer::PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const Vector3& up, const float& area, float minX, float minY, float maxX, float maxY, float* weights) const
+	void Renderer::PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const Vector3& up, const float& area, float minX, float minY, float maxX, float maxY, float* weights)
 	{
 		if (pixelIndex == -1) return;
 
@@ -260,25 +526,73 @@ namespace dae {
 		const float pixel_x{ px + 0.5f };
 		const float pixel_y{ py + 0.5f };
 
-		const Vector3& point{ pixel_x,pixel_y,1 };
+		const Vector2& point{ pixel_x,pixel_y };
 
-		for (int index{ 0 }; index < 3; ++index)
+		auto v0{ vertices_ndc[0].position.GetXY() };
+		auto v1{ vertices_ndc[1].position.GetXY() };
+		auto v2{ vertices_ndc[2].position.GetXY() };
+
+		auto sin1{ Vector2::Cross(v1 - v0, point - v0) / area };
+		auto sin2{ Vector2::Cross(v2 - v1, point - v1) / area };
+		auto sin3{ Vector2::Cross(v0 - v2, point - v2) / area };
+
+		auto sum{ sin1 + sin2 + sin3 };
+		float eps = 1e-4;
+		 
+		bool isInNotTriangle{! (std::abs(sum -1) <= eps) && !(std::abs(sum + 1) <= eps)};
+
+		if (isInNotTriangle)
+		{
+			return;
+		}
+
+		weights[0] = sin1;
+		weights[1] = sin2;
+		weights[2] = sin3;
+
+		bool culling{ false };
+
+		if (m_CullMode != None)
+		{
+			if (m_CullMode == Back)
+			{
+				culling = !(weights[0] >= 0.f && weights[1] >= 0.f && weights[2] >= 0.f);
+			}
+			else
+			{
+				culling = !(weights[0] < 0.f && weights[1] < 0.f && weights[2] < 0.f);
+			}
+		}
+		else 
+		{
+			culling = !((weights[0] < 0.f && weights[1] < 0.f && weights[2] < 0.f) || (weights[0] >= 0.f && weights[1] >= 0.f && weights[2] >= 0.f));
+
+		}
+
+		if (culling) return;
+
+		weights[2] = std::abs(sin1);
+		weights[0] = std::abs(sin2);
+		weights[1] = std::abs(sin3);
+
+
+		/*for (int index{ 0 }; index < 3; ++index)
 		{
 			const int otherIndex{ index == 2 ? 0 : index + 1 };
 
-			const Vector3 c{ point - vertices_ndc[index].position };
-			const Vector3 a{ vertices_ndc[otherIndex].position - vertices_ndc[index].position };
-			const Vector3 cross{ Vector3::Cross(a,c) };
-			const float dotResult{ Vector3::Dot(cross,up) };
-			if (dotResult < 0)
+			const Vector2 c{ point - vertices_ndc[index].position.GetXY() };
+			const Vector2 a{ vertices_ndc[otherIndex].position.GetXY() - vertices_ndc[index].position.GetXY()};
+			const float cross{ Vector2::Cross(a,c) };
+			
+			if (cross < 0)
 			{
 				return;
 			}
-			const float weight{ ((Vector2::Cross(a.GetXY(), c.GetXY()) * .5f) / area) };
+			const float weight{ ((Vector2::Cross(a, c) * .5f) / area) };
 
 			const int weightIndex{ index == 0 ? 2 : index - 1 };
 			weights[weightIndex] = weight;
-		}
+		}*/
 
 		float depth{ ((weights[0] / vertices_ndc[0].position.z) + (weights[1] / vertices_ndc[1].position.z) + (weights[2] / vertices_ndc[2].position.z)) };
 		depth = 1.f / depth;
@@ -290,31 +604,41 @@ namespace dae {
 		float w_interpolated{ 0 };
 		Vector2 caculated_uv{};
 
-		for (int index{ 0 }; index < vertices_ndc.size(); ++index)
+		if (m_RenderDepthBuffer)
 		{
-			caculated_uv += (vertices_ndc[index].uv / vertices_ndc[index].position.w) * weights[index];
-			w_interpolated += (1.f / vertices_ndc[index].position.w) * weights[index];
+			m_MinDepth = std::min(m_MinDepth, depth);
+			m_MaxDepth = std::max(m_MaxDepth, depth);
 		}
-
-		w_interpolated = 1.f / w_interpolated;
-		caculated_uv *= w_interpolated;
-
-
-		Vector3 normal{};
-		Vector3 tangent{};
-		Vector3 viewDirection{};
-
-		for (int index{ 0 }; index < vertices_ndc.size(); ++index)
+		else
 		{
-			normal += vertices_ndc[index].normal * weights[index];
-			tangent += vertices_ndc[index].tangent * weights[index];
-			viewDirection += vertices_ndc[index].viewDirection * weights[index];
+			for (int index{ 0 }; index < vertices_ndc.size(); ++index)
+			{
+				caculated_uv += (vertices_ndc[index].uv / vertices_ndc[index].position.w) * weights[index];
+				w_interpolated += (1.f / vertices_ndc[index].position.w) * weights[index];
+			}
+
+			w_interpolated = 1.f / w_interpolated;
+			caculated_uv *= w_interpolated;
+
+
+			Vector3 normal{};
+			Vector3 tangent{};
+			Vector3 viewDirection{};
+
+			for (int index{ 0 }; index < vertices_ndc.size(); ++index)
+			{
+				normal += vertices_ndc[index].normal * weights[index];
+				tangent += vertices_ndc[index].tangent * weights[index];
+				viewDirection += vertices_ndc[index].viewDirection * weights[index];
+			}
+
+			const ColorRGB sampledColor{ m_pMesh->GetDiffuseMap()->Sample(caculated_uv) };
+			const Vertex_Out pixelVertex{ {},caculated_uv,normal.Normalized(),tangent.Normalized() };
+
+			finalColor = PixelShading(pixelVertex, viewDirection.Normalized(), sampledColor, pMesh);
+
+
 		}
-
-		const ColorRGB sampledColor{ m_pMesh->GetDiffuseMap()->Sample(caculated_uv) };
-		const Vertex_Out pixelVertex{ {},caculated_uv,normal.Normalized(),tangent.Normalized()};
-
-		finalColor = PixelShading(pixelVertex,viewDirection.Normalized(), sampledColor, pMesh);
 
 		finalColor.MaxToOne();
 
@@ -325,9 +649,11 @@ namespace dae {
 
 	}
 
-		ColorRGB Renderer::PixelShading(const Vertex_Out& vertex,const Vector3& viewDirection, const ColorRGB& sampledColor, const Mesh* pMesh) const
+	ColorRGB Renderer::PixelShading(const Vertex_Out& vertex, const Vector3& viewDirection, const ColorRGB& sampledColor, const Mesh* pMesh)
+	{
+		Vector3 normal{ vertex.normal };
+		if (m_UseNormalMap)
 		{
-			Vector3 normal{ vertex.normal };
 			const Vector3 binormal{ Vector3::Cross(vertex.normal, vertex.tangent) };
 			const Matrix tangentSpaceAxis{ vertex.tangent, binormal, vertex.normal, Vector3::Zero };
 			const ColorRGB sampledNormal{ pMesh->GetNormalMap()->Sample(vertex.uv) / 255.f };
@@ -338,13 +664,28 @@ namespace dae {
 			Vector3 transformedNormal{ tangentSpaceAxis.TransformVector(caculatedNormal) };
 			transformedNormal.Normalize();
 			normal = transformedNormal;
-
-
-			const float observedArea{ std::max(Vector3::Dot(normal, m_InvLightDirection), 0.f) };
-			const ColorRGB lambert{ GetDiffuse(sampledColor) };
-			const ColorRGB specular{ GetSpecular(vertex,normal,viewDirection,pMesh) };
-			return ((lambert * observedArea) / 255.f) + specular;
 		}
+
+
+
+		const float observedArea{ std::max(Vector3::Dot(normal, m_InvLightDirection), 0.f) };
+		const ColorRGB lambert{ GetDiffuse(sampledColor) };
+		const ColorRGB specular{ GetSpecular(vertex,normal,viewDirection,pMesh) };
+
+
+		switch (m_ShadingMode)
+		{
+		case dae::Combined:
+			return ((lambert * observedArea) / 255.f) + specular;
+		case dae::Observed:
+			return (colors::White * observedArea);
+		case dae::Diffuse:
+			return lambert / 255.f;
+		case dae::Specular:
+			return specular;
+		}
+
+	}
 
 	void Renderer::ExtractFrustumPlanes(const Matrix& viewProjectionMatrix, Frustum& frustum) const
 	{
@@ -405,6 +746,7 @@ namespace dae {
 		Frustum frustum;
 		ExtractFrustumPlanes(m, frustum);
 
+		int cullingCount = 0;
 		for (const auto& vertex : vertices_in)
 		{
 			// Transform to clip space
@@ -418,10 +760,8 @@ namespace dae {
 
 			if (!frustum.IsInsideFrustum(transformedPosition))
 			{
-				culling = true;
+				++cullingCount;
 			}
-
-			
 
 			// Convert to screen space
 			Vertex_Out newVertex;
@@ -440,6 +780,8 @@ namespace dae {
 
 			vertices_out.emplace_back(newVertex);
 		}
+
+		culling = cullingCount == vertices_in.size();
 	}
 
 	ColorRGB Renderer::GetDiffuse(const ColorRGB& sampledColor) const
@@ -447,11 +789,11 @@ namespace dae {
 		return ((m_LightIntensity * sampledColor) / M_PI);
 	}
 
-	ColorRGB Renderer::GetSpecular(const Vertex_Out& vertex, const Vector3& normal,const Vector3& viewDirection, const Mesh* pMesh) const
+	ColorRGB Renderer::GetSpecular(const Vertex_Out& vertex, const Vector3& normal, const Vector3& viewDirection, const Mesh* pMesh) const
 	{
-		ColorRGB gloss{ pMesh->GetGlossinessMap()->Sample(vertex.uv) /255.f };
-		const float glossiness{ gloss.r * m_Shininess};
-		ColorRGB specularColor{ pMesh->GetSpecularMap()->Sample(vertex.uv) / 255.f};
+		ColorRGB gloss{ pMesh->GetGlossinessMap()->Sample(vertex.uv) / 255.f };
+		const float glossiness{ gloss.r * m_Shininess };
+		ColorRGB specularColor{ pMesh->GetSpecularMap()->Sample(vertex.uv) / 255.f };
 
 		const float dot{ Vector3::Dot(m_InvLightDirection, normal) };
 		const Vector3 reflect{ (m_InvLightDirection - (2.f * std::max(dot,0.f) * normal)) };
@@ -464,7 +806,46 @@ namespace dae {
 
 	void Renderer::RotateMesh(float elapsedSec)
 	{
+		if (!m_VehicleRotation) return;
+
 		m_pMesh->WorldMatrix *= Matrix::CreateRotationY(elapsedSec);
+	}
+
+	void Renderer::PrintOutKeys()
+	{
+
+		HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+		SetConsoleTextAttribute(hConsole, 6);
+		std::cout << "[Key bindings - SHARED]" << std::endl;
+		std::cout << "  [F1]  Toggle Rasterizer Mode (HARDWARE/SOFTWARE)" << std::endl;
+		std::cout << "  [F2]  Toggle Vehicle Rotation (ON/OFF)" << std::endl;
+		std::cout << "  [F9]  Cycle CullMode (BACK/FRONT/NONE)" << std::endl;
+		std::cout << "  [F10] Toggle Uniform ClearColor (ON/OFF)" << std::endl;
+		std::cout << "  [F11] Toggle Print FPS (ON/OFF)" << std::endl;
+		std::cout << std::endl;
+		SetConsoleTextAttribute(hConsole, 2);
+		std::cout << "[Key bindings - HARDWARE]" << std::endl;
+		std::cout << "  [F3] Toggle FireFX (ON/OFF)" << std::endl;
+		std::cout << "  [F4] Cycle Sampler State (POINT/LINEAR/ANISOTROPIC)" << std::endl;
+		std::cout << std::endl;
+		SetConsoleTextAttribute(hConsole, 5);
+		std::cout << "[Key Bindings - SOFTWARE" << std::endl;
+		std::cout << "  [F5] Cycle Shading Mode (COMBINED/OBSERVED_AREA/DIFFUSE/SPECULAR)" << std::endl;
+		std::cout << "  [F6] Toggle NormalMap (ON/OFF)" << std::endl;
+		std::cout << "  [F7] Tpggle DepthBuffer Visualization (ON/OFF)" << std::endl;
+		std::cout << "  [F8] Toggle BoundingBox visualization (ON/OFF)" << std::endl;
+
+		SetConsoleTextAttribute(hConsole, 15);
+	}
+
+	float Renderer::Remap(float value, float min, float max) const
+	{
+		// Linear remapping
+		float linearRemap{ (value - min) / (max - min) };
+
+		// Apply nonlinear adjustment (if needed)
+		return linearRemap; // Exponent < 1.0 emphasizes high values
 	}
 
 	HRESULT Renderer::InitializeDirectX()
