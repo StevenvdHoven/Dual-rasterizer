@@ -21,6 +21,7 @@ public:
 	//void Render_Software(float aspectRatio, float width, float height, dae::Camera* pCamera, const dae::Frustum& frustum, SDL_Surface* pBackBuffer, uint32_t* pBackBufferPixels, float* pDepthBufferArr);
 
 	void SetSamplerState(Effect::SampleState samplerState);
+	void SetCullingMode(dae::CullMode cullmode);
 
 	dae::Texture* GetDiffuseMap() const;
 	dae::Texture* GetNormalMap() const;
@@ -44,6 +45,11 @@ private:
 	std::unique_ptr<dae::Texture> m_pNormalMap;
 	std::unique_ptr<dae::Texture> m_pSpecularMap;
 	std::unique_ptr<dae::Texture> m_pGlossinessMap;
+
+	ID3D11RasterizerState* m_RasterizerStateBack;
+	ID3D11RasterizerState* m_RasterizerStateFront;
+	ID3D11RasterizerState* m_RasterizerStateNone;
+	ID3D11RasterizerState* m_CurrentRastizerState;
 
 	uint32_t m_NumIndices;
 

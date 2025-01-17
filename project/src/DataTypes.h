@@ -86,6 +86,27 @@ namespace dae
 		TriangleStrip
 	};
 
+	enum RenderMethod
+	{
+		DirectX,
+		Software
+	};
+
+	enum CullMode
+	{
+		Back,
+		Front,
+		None
+	};
+
+	enum ShadingMode
+	{
+		Combined,
+		Observed,
+		Diffuse,
+		Specular
+	};
+
 	struct Triangle
 	{
 		std::vector<Vertex_Out> vertices;

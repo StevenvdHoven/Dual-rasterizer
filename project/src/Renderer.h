@@ -16,26 +16,7 @@ class Camera;
 
 namespace dae
 {
-	enum RenderMethod
-	{
-		DirectX,
-		Software
-	};
-
-	enum CullMode
-	{
-		Back,
-		Front,
-		None
-	};
-
-	enum ShadingMode
-	{
-		Combined,
-		Observed,
-		Diffuse,
-		Specular
-	};
+	
 
 	class Renderer final
 	{

@@ -55,6 +55,8 @@ private:
 	ID3DX11EffectMatrixVariable* m_pWorldMatrix;
 	ID3DX11EffectMatrixVariable* m_pWorldViewProjectionMatrix;
 
+	
+
 	uint32_t m_NumIndices;
 
 	SampleState m_TechniqueMode;

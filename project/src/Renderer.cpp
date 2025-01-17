@@ -120,6 +120,7 @@ namespace dae {
 		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, color);
 		m_pDeviceContext->ClearDepthStencilView(m_pDethStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 
+
 		m_pMesh->Render_DirectX(m_pDeviceContext, m_Camera);
 
 
@@ -238,7 +239,7 @@ namespace dae {
 		case dae::Back:
 			m_CullMode = Front;
 			std::cout << "**CullMode = Front**" << std::endl;
-
+			
 			break;
 		case dae::Front:
 			m_CullMode = None;
@@ -251,6 +252,7 @@ namespace dae {
 		default:
 			break;
 		}
+		m_pMesh->SetCullingMode(m_CullMode);
 		SetConsoleTextAttribute(hConsole, 15);
 	}
 
