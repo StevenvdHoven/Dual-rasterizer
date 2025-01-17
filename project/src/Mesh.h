@@ -14,7 +14,7 @@ struct Matrix;
 class Mesh final
 {
 public:
-	Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices, std::string* texturesPaths);
+	Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices, std::string* texturesPaths, bool onlyDiffuse, Effect* pEffect);
 	~Mesh();
 
 	void Render_DirectX(ID3D11DeviceContext* pDeviceContext, dae::Camera* camera);

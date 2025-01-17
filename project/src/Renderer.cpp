@@ -30,12 +30,6 @@ namespace dae {
 			m_IsInitialized = true;
 
 			std::vector<Vertex_In> vertices;
-			/*std::vector<Vertex_In> vertices{
-				{{0,0,0}},
-				{{0,10,0}},
-				{{-10,10,0}},
-				{{-10,0,0}},
-			};*/
 			std::vector<uint32_t> indices;
 			/*std::vector<uint32_t> indices{ 0,1,2,3,0,2 };*/
 			Utils::ParseOBJ("resources/vehicle.obj", vertices, indices);
@@ -48,15 +42,43 @@ namespace dae {
 				"resources/vehicle_gloss.png",
 			};
 
+
+
 			m_pMesh = new Mesh
 			{
 				m_pDevice,
 				vertices,
 				indices,
-				texturePaths
+				texturePaths,
+				false,
+				new OpaqueEffect{ Effect::LoadEffect(m_pDevice,L"resources/PosCol3D.fx") ,m_pDevice,vertices,indices }
 			};
 
-			m_pMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,0 });
+			m_pMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
+
+			std::vector<Vertex_In> fireVertices;
+			std::vector<uint32_t> fireIndices;
+
+			Utils::ParseOBJ("resources/fireFX.obj", fireVertices, fireIndices);
+
+			std::string fireTexturePaths[1]
+			{
+				"resources/fireFX_diffuse.png"
+			};
+
+
+
+			m_pFireMesh = new Mesh
+			{
+				m_pDevice,
+				fireVertices,
+				fireIndices,
+				fireTexturePaths,
+				true,
+				new TransparentEffect{ Effect::LoadEffect(m_pDevice,L"resources/Transparent.fx") ,m_pDevice,fireVertices,fireIndices }
+			};
+
+			m_pFireMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
 
 			std::cout << "DirectX is initialized and ready!\n";
 		}
@@ -66,7 +88,7 @@ namespace dae {
 		}
 
 		m_Camera = new Camera{};
-		m_Camera->Initialize(45.f, { 0,0,-40.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
+		m_Camera->Initialize(45.f, { 0,0,0.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
 
 		PrintOutKeys();
 	}
@@ -116,12 +138,18 @@ namespace dae {
 		if (!m_IsInitialized)
 			return;
 
-		constexpr float color[4] = { 0.f,0.f,0.3f,1.f };
-		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, color);
+		constexpr float color[4] = { .39f, .59f, .93f,1.f };
+		constexpr float clearColor[4] = { .1f,.1f,.1f,1.f };
+
+		m_pDeviceContext->ClearRenderTargetView(m_pRenderTargetView, m_ClearColor ? clearColor : color);
 		m_pDeviceContext->ClearDepthStencilView(m_pDethStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 
 
 		m_pMesh->Render_DirectX(m_pDeviceContext, m_Camera);
+		if (m_RenderFireFX)
+		{
+			m_pFireMesh->Render_DirectX(m_pDeviceContext, m_Camera);
+		}
 
 
 		m_pSwapChain->Present(0, 0);
@@ -143,7 +171,11 @@ namespace dae {
 		{
 			for (int py{ 0 }; py < m_Height; ++py)
 			{
-				ColorRGB finalColor{ .25f, .25f, .25f };
+				ColorRGB finalColor{ .39f, .39f, .39f };
+				if (m_ClearColor)
+				{
+					finalColor = { .1f, .1f, .1f };
+				}
 
 				finalColor.MaxToOne();
 				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
@@ -239,7 +271,7 @@ namespace dae {
 		case dae::Back:
 			m_CullMode = Front;
 			std::cout << "**CullMode = Front**" << std::endl;
-			
+
 			break;
 		case dae::Front:
 			m_CullMode = None;
@@ -253,6 +285,7 @@ namespace dae {
 			break;
 		}
 		m_pMesh->SetCullingMode(m_CullMode);
+
 		SetConsoleTextAttribute(hConsole, 15);
 	}
 
@@ -448,27 +481,6 @@ namespace dae {
 
 	void Renderer::RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh)
 	{
-		//if (m_CullMode != None)
-		//{
-		//	// Calculate the triangle edges and normal
-		//	const Vector3 edge1 = vertices_ndc[1].position - vertices_ndc[0].position;
-		//	const Vector3 edge2 = vertices_ndc[2].position - vertices_ndc[0].position;
-		//	const Vector3 normal = Vector3::Cross(edge1, edge2).Normalized();
-
-		//	// Calculate the view direction
-		//	const Vector3 position{ vertices_ndc[0].position };
-		//	
-
-		//	// Dot product for back-face culling
-		//	const float dot = Vector3::Dot(normal, Vector3{0,0,-1});
-
-		//	// Perform culling
-		//	if ((m_CullMode == Back && dot > 0) || (m_CullMode == Front && dot < 0))
-		//	{
-		//		return; // Skip rasterization for the culled triangle
-		//	}
-		//}
-
 
 		const std::vector<float> xPositions{ vertices_ndc[0].position.x,vertices_ndc[1].position.x,vertices_ndc[2].position.x };
 		const std::vector<float> yPositions{ vertices_ndc[0].position.y,vertices_ndc[1].position.y,vertices_ndc[2].position.y };
@@ -483,8 +495,8 @@ namespace dae {
 		maxX = std::ceil(std::min((float)m_Width, maxX));
 		maxY = std::ceil(std::min((float)m_Height, maxY));
 
-		const Vector2 v0{ vertices_ndc[1].position.GetXY() - vertices_ndc[0].position.GetXY()};
-		const Vector2 v1{ vertices_ndc[2].position.GetXY() - vertices_ndc[0].position.GetXY()};
+		const Vector2 v0{ vertices_ndc[1].position.GetXY() - vertices_ndc[0].position.GetXY() };
+		const Vector2 v1{ vertices_ndc[2].position.GetXY() - vertices_ndc[0].position.GetXY() };
 
 		const float area{ std::fabs(Vector2::Cross(v0,v1)) };
 
@@ -540,8 +552,8 @@ namespace dae {
 
 		auto sum{ sin1 + sin2 + sin3 };
 		float eps = 1e-4;
-		 
-		bool isInNotTriangle{! (std::abs(sum -1) <= eps) && !(std::abs(sum + 1) <= eps)};
+
+		bool isInNotTriangle{ !(std::abs(sum - 1) <= eps) && !(std::abs(sum + 1) <= eps) };
 
 		if (isInNotTriangle)
 		{
@@ -565,7 +577,7 @@ namespace dae {
 				culling = !(weights[0] < 0.f && weights[1] < 0.f && weights[2] < 0.f);
 			}
 		}
-		else 
+		else
 		{
 			culling = !((weights[0] < 0.f && weights[1] < 0.f && weights[2] < 0.f) || (weights[0] >= 0.f && weights[1] >= 0.f && weights[2] >= 0.f));
 
@@ -576,25 +588,6 @@ namespace dae {
 		weights[2] = std::abs(sin1);
 		weights[0] = std::abs(sin2);
 		weights[1] = std::abs(sin3);
-
-
-		/*for (int index{ 0 }; index < 3; ++index)
-		{
-			const int otherIndex{ index == 2 ? 0 : index + 1 };
-
-			const Vector2 c{ point - vertices_ndc[index].position.GetXY() };
-			const Vector2 a{ vertices_ndc[otherIndex].position.GetXY() - vertices_ndc[index].position.GetXY()};
-			const float cross{ Vector2::Cross(a,c) };
-			
-			if (cross < 0)
-			{
-				return;
-			}
-			const float weight{ ((Vector2::Cross(a, c) * .5f) / area) };
-
-			const int weightIndex{ index == 0 ? 2 : index - 1 };
-			weights[weightIndex] = weight;
-		}*/
 
 		float depth{ ((weights[0] / vertices_ndc[0].position.z) + (weights[1] / vertices_ndc[1].position.z) + (weights[2] / vertices_ndc[2].position.z)) };
 		depth = 1.f / depth;
@@ -810,7 +803,20 @@ namespace dae {
 	{
 		if (!m_VehicleRotation) return;
 
-		m_pMesh->WorldMatrix *= Matrix::CreateRotationY(elapsedSec);
+		auto translationMatrix = Matrix::CreateTranslation({ 0,0,-50 });
+
+		m_pMesh->WorldMatrix *= translationMatrix;
+		m_pFireMesh->WorldMatrix *= translationMatrix;
+
+		const auto rotationMatrix = Matrix::CreateRotationY(elapsedSec);
+
+		m_pMesh->WorldMatrix *= rotationMatrix;
+		m_pFireMesh->WorldMatrix *= rotationMatrix;
+
+		translationMatrix.Inverse();
+
+		m_pMesh->WorldMatrix *= translationMatrix;
+		m_pFireMesh->WorldMatrix *= translationMatrix;
 	}
 
 	void Renderer::PrintOutKeys()

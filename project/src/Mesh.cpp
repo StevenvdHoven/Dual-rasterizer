@@ -12,32 +12,31 @@
 #include <iostream>
 
 
-Mesh::Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices, std::string* texturesPaths):
+Mesh::Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices, std::string* texturesPaths, bool onlyDiffuse, Effect* pEffect):
 	m_Vertices{vertices},
-	m_Indices{indices}
+	m_Indices{indices},
+	m_pEffect{pEffect}
 {
 	HRESULT result;
 
-	const std::wstring assetFile{ L"resources/PosCol3D.fx" };
-	auto pEffect{ Effect::LoadEffect(pDevice,assetFile) };
-	m_pEffect = new Effect{ pEffect ,pDevice,vertices,indices };
+	
 
 	m_pDiffuseMap = dae::Texture::LoadFromFile(texturesPaths[0], pDevice);
 	m_pEffect->SetDiffuseMap(m_pDiffuseMap.get());
 
-	if (!texturesPaths[1].empty())
+	if (!onlyDiffuse && !texturesPaths[1].empty())
 	{
 		m_pNormalMap = dae::Texture::LoadFromFile(texturesPaths[1], pDevice);
 		m_pEffect->SetNormalMap(m_pNormalMap.get());
 	}
 
-	if (!texturesPaths[2].empty())
+	if (!onlyDiffuse && !texturesPaths[2].empty())
 	{
 		m_pSpecularMap = dae::Texture::LoadFromFile(texturesPaths[2], pDevice);
 		m_pEffect->SetSpecularMap(m_pSpecularMap.get());
 	}
 
-	if (!texturesPaths[3].empty())
+	if (!onlyDiffuse && !texturesPaths[3].empty())
 	{
 		m_pGlossinessMap = dae::Texture::LoadFromFile(texturesPaths[3], pDevice);
 		m_pEffect->SetGlossinessMap(m_pGlossinessMap.get());
@@ -132,7 +131,7 @@ void Mesh::Render_DirectX(ID3D11DeviceContext* pDeviceContext, dae::Camera* came
 	dae::Matrix proj{ camera->ProjectionMatrix };
 	const dae::Matrix worldViewProjectionMatrix{ WorldMatrix * view * proj };
 
-	m_pEffect->SetMatrix(worldViewProjectionMatrix, WorldMatrix, camera->origin);
+	m_pEffect->SetMatricis(worldViewProjectionMatrix, WorldMatrix, camera->origin);
 
 	//4. Set IndexBuffer
 	pDeviceContext->IASetIndexBuffer(m_pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);

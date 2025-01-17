@@ -123,6 +123,7 @@ namespace dae
 		const float m_Shininess{ 25.f };
 
 		Mesh* m_pMesh;
+		Mesh* m_pFireMesh;
 		Camera* m_Camera;
 		//...
 	};
