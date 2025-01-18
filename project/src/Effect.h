@@ -21,7 +21,7 @@ public:
 	};
 
 	Effect() = default;
-	~Effect() = default;
+	virtual ~Effect() = default;
 
 	
 
@@ -44,8 +44,8 @@ public:
 class OpaqueEffect : public Effect
 {
 public:
-	OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices);
-	~OpaqueEffect();
+	OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, const std::vector<dae::Vertex_In>& vertices, const std::vector<uint32_t>& indices);
+	virtual ~OpaqueEffect();
 
 	void SetTechnique(SampleState technique) override;
 
@@ -76,16 +76,14 @@ private:
 	ID3DX11EffectVariable* m_pCameraPosition;
 	ID3DX11EffectMatrixVariable* m_pWorldMatrix;
 	ID3DX11EffectMatrixVariable* m_pWorldViewProjectionMatrix;
-
-	uint32_t m_NumIndices;
 };
 
 
 class TransparentEffect : public Effect
 {
 public:
-	TransparentEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices);
-	~TransparentEffect();
+	TransparentEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, const std::vector<dae::Vertex_In>& vertices, const std::vector<uint32_t>& indice);
+	virtual ~TransparentEffect();
 
 	void SetTechnique(SampleState technique) override;
 

@@ -57,13 +57,20 @@ ID3DX11Effect* Effect::LoadEffect(ID3D11Device* pDevice, const std::wstring& ass
 	return pEffect;
 }
 
-OpaqueEffect::OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices):
-	m_pEffect{pEffect}
-{
-	m_PointTechnique = m_pEffect->GetTechniqueByName("PointTechnique");
-	m_LinearTechnique = m_pEffect->GetTechniqueByName("LinearTechnique");
-	m_AnisotropicTechnique = m_pEffect->GetTechniqueByName("AnisotropicTechnique");
+OpaqueEffect::OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, const std::vector<dae::Vertex_In>& vertices, const std::vector<uint32_t>& indice):
+	m_pEffect						{ pEffect},
+	m_pCameraPosition				{ pEffect->GetVariableByName("gCameraPosition")->AsVector() },
+	m_pWorldMatrix					{ pEffect->GetVariableByName("gWorldMatrix")->AsMatrix() },
+	m_pWorldViewProjectionMatrix	{ pEffect->GetVariableByName("gWorldViewProj")->AsMatrix() },
+	m_pDiffuseMapVariable			{ pEffect->GetVariableByName("gDiffuseMap")->AsShaderResource() },
+	m_pNormalMapVariable			{ pEffect->GetVariableByName("gNormalMap")->AsShaderResource() },
+	m_pSpecularMapVariable			{ pEffect->GetVariableByName("gSpecularMap")->AsShaderResource() },
+	m_pGlossinessMapVariable		{ pEffect->GetVariableByName("gGlossinessMap")->AsShaderResource() },
+	m_PointTechnique				{ pEffect->GetTechniqueByName("PointTechnique") },
+	m_LinearTechnique				{ pEffect->GetTechniqueByName("LinearTechnique") },
+	m_AnisotropicTechnique			{ pEffect->GetTechniqueByName("AnisotropicTechnique") }
 
+{
 	m_pTechnique = m_PointTechnique;
 
 	if (!m_pTechnique->IsValid())
@@ -110,47 +117,37 @@ OpaqueEffect::OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::v
 		return;
 	}
 
-	m_pWorldViewProjectionMatrix = m_pEffect->GetVariableByName("gWorldViewProj")->AsMatrix();
 	if (!m_pWorldViewProjectionMatrix->IsValid())
 	{
 		std::wcout << L"WorldViewProjection matrix not valid" << std::endl;
 	}
-
-	m_pDiffuseMapVariable = m_pEffect->GetVariableByName("gDiffuseMap")->AsShaderResource();
 
 	if (!m_pDiffuseMapVariable->IsValid())
 	{
 		std::wcout << L"DiffuseMap variable not valid\n";
 	}
 
-	m_pNormalMapVariable = m_pEffect->GetVariableByName("gNormalMap")->AsShaderResource();
 
 	if (!m_pNormalMapVariable->IsValid())
 	{
 		std::wcout << L"NormalMap variable not valid\n";
 	}
 
-	m_pSpecularMapVariable = m_pEffect->GetVariableByName("gSpecularMap")->AsShaderResource();
 
 	if (!m_pSpecularMapVariable->IsValid())
 	{
 		std::wcout << L"SpecularMap variable not valid\n";
 	}
 
-	m_pGlossinessMapVariable = m_pEffect->GetVariableByName("gGlossinessMap")->AsShaderResource();
-
 	if (!m_pGlossinessMapVariable->IsValid())
 	{
 		std::wcout << L"GlossinessMap variable not valid\n";
 	}
 
-	m_pWorldMatrix = m_pEffect->GetVariableByName("gWorldMatrix")->AsMatrix();
 	if (!m_pWorldMatrix->IsValid())
 	{
 		std::wcout << L"WorldMatrix not valid!" << std::endl;
 	}
-
-	m_pCameraPosition = m_pEffect->GetVariableByName("gCameraPosition")->AsVector();
 
 	if (!m_pCameraPosition->IsValid())
 	{
@@ -162,7 +159,21 @@ OpaqueEffect::OpaqueEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::v
 
 OpaqueEffect::~OpaqueEffect()
 {
+	m_PointTechnique->Release();
+	m_LinearTechnique->Release();
+	m_AnisotropicTechnique->Release();
 
+	m_pDiffuseMapVariable->Release();
+	m_pNormalMapVariable->Release();
+	m_pSpecularMapVariable->Release();
+	m_pGlossinessMapVariable->Release();
+
+	m_pCameraPosition->Release();
+	m_pWorldMatrix->Release();
+	m_pWorldViewProjectionMatrix->Release();
+
+	m_pInputLayout->Release();
+	m_pEffect->Release();
 }
 
 void OpaqueEffect::SetTechnique(SampleState technique)
@@ -252,13 +263,13 @@ ID3D11InputLayout* OpaqueEffect::GetInputLayout() const
 	return m_pInputLayout;
 }
 
-TransparentEffect::TransparentEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices):
-	m_pEffect{pEffect}
+TransparentEffect::TransparentEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevice, const std::vector<dae::Vertex_In>& vertices, const std::vector<uint32_t>& indice):
+	m_pEffect{pEffect},
+	m_pWorldViewProjectionMatrix{nullptr},
+	m_PointTechnique{ pEffect->GetTechniqueByName("PointTechnique") },
+	m_LinearTechnique{ pEffect->GetTechniqueByName("LinearTechnique") },
+	m_AnisotropicTechnique{ pEffect->GetTechniqueByName("AnisotropicTechnique") }
 {
-	m_PointTechnique = m_pEffect->GetTechniqueByName("PointTechnique");
-	m_LinearTechnique = m_pEffect->GetTechniqueByName("LinearTechnique");
-	m_AnisotropicTechnique = m_pEffect->GetTechniqueByName("AnisotropicTechnique");
-
 	m_pTechnique = m_PointTechnique;
 
 	if (!m_pTechnique->IsValid())
@@ -321,6 +332,16 @@ TransparentEffect::TransparentEffect(ID3DX11Effect* pEffect, ID3D11Device* pDevi
 
 TransparentEffect::~TransparentEffect()
 {
+	m_PointTechnique->Release();
+	m_LinearTechnique->Release();
+	m_AnisotropicTechnique->Release();
+
+	m_pDiffuseMapVariable->Release();
+
+	m_pWorldViewProjectionMatrix->Release();
+
+	m_pInputLayout->Release();
+	m_pEffect->Release();
 }
 
 void TransparentEffect::SetTechnique(SampleState technique)

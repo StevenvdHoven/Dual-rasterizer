@@ -57,7 +57,7 @@ namespace dae
         void CalculateViewMatrix()
         {
             // Constants
-            const float toDegreeScale{ M_PI / 180.0f };
+            const float toDegreeScale{ static_cast<float>(M_PI) / 180.0f };
 
             // Create translation matrix based on the current origin
             const Matrix translationMatrix = Matrix::CreateTranslation(origin);

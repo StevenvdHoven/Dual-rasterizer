@@ -13,13 +13,20 @@
 
 
 Mesh::Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vector<uint32_t> indices, std::string* texturesPaths, bool onlyDiffuse, Effect* pEffect):
+	m_pEffect{ pEffect },
 	m_Vertices{vertices},
 	m_Indices{indices},
-	m_pEffect{pEffect}
+	m_RasterizerStateBack{nullptr},
+	m_RasterizerStateFront{nullptr},
+	m_RasterizerStateNone{nullptr},
+	m_CurrentRastizerState{nullptr},
+	m_pIndexBuffer{ nullptr },
+	m_pVertexBuffer{ nullptr },
+	m_NumIndices{ 0 }
 {
-	HRESULT result;
-
 	
+	
+	HRESULT result;
 
 	m_pDiffuseMap = dae::Texture::LoadFromFile(texturesPaths[0], pDevice);
 	m_pEffect->SetDiffuseMap(m_pDiffuseMap.get());
@@ -74,8 +81,6 @@ Mesh::Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vec
 
 	m_CurrentRastizerState = m_RasterizerStateBack;
 
-	
-
 	// Create vertex Buffer
 	D3D11_BUFFER_DESC bd{};
 	bd.Usage = D3D11_USAGE_IMMUTABLE;
@@ -107,8 +112,18 @@ Mesh::Mesh(ID3D11Device* pDevice, std::vector<dae::Vertex_In> vertices, std::vec
 
 Mesh::~Mesh()
 {
+	m_RasterizerStateBack->Release();
+	m_RasterizerStateFront->Release();
+	m_RasterizerStateNone->Release();
+
+	m_pDiffuseMap.reset();
+	m_pNormalMap.reset();
+	m_pSpecularMap.reset();
+	m_pGlossinessMap.reset();
+
 	if (m_pVertexBuffer) m_pVertexBuffer->Release();
 	if (m_pIndexBuffer) m_pIndexBuffer->Release();
+
 	delete m_pEffect;
 }
 

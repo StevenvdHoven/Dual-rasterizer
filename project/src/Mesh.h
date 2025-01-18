@@ -7,7 +7,7 @@
 #include "Effect.h"
 
 
-class ID3D11Device;
+struct ID3D11Device;
 struct Matrix;
 
 

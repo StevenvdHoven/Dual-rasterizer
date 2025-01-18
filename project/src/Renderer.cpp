@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <execution>
 
+#define EPS 1e-4
 
 namespace dae {
 
@@ -29,56 +30,7 @@ namespace dae {
 		{
 			m_IsInitialized = true;
 
-			std::vector<Vertex_In> vertices;
-			std::vector<uint32_t> indices;
-			/*std::vector<uint32_t> indices{ 0,1,2,3,0,2 };*/
-			Utils::ParseOBJ("resources/vehicle.obj", vertices, indices);
-
-			std::string texturePaths[4]
-			{
-				"resources/vehicle_diffuse.png",
-				"resources/vehicle_normal.png",
-				"resources/vehicle_specular.png",
-				"resources/vehicle_gloss.png",
-			};
-
-
-
-			m_pMesh = new Mesh
-			{
-				m_pDevice,
-				vertices,
-				indices,
-				texturePaths,
-				false,
-				new OpaqueEffect{ Effect::LoadEffect(m_pDevice,L"resources/PosCol3D.fx") ,m_pDevice,vertices,indices }
-			};
-
-			m_pMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
-
-			std::vector<Vertex_In> fireVertices;
-			std::vector<uint32_t> fireIndices;
-
-			Utils::ParseOBJ("resources/fireFX.obj", fireVertices, fireIndices);
-
-			std::string fireTexturePaths[1]
-			{
-				"resources/fireFX_diffuse.png"
-			};
-
-
-
-			m_pFireMesh = new Mesh
-			{
-				m_pDevice,
-				fireVertices,
-				fireIndices,
-				fireTexturePaths,
-				true,
-				new TransparentEffect{ Effect::LoadEffect(m_pDevice,L"resources/Transparent.fx") ,m_pDevice,fireVertices,fireIndices }
-			};
-
-			m_pFireMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
+			CreateMeshes();
 
 			std::cout << "DirectX is initialized and ready!\n";
 		}
@@ -87,16 +39,18 @@ namespace dae {
 			std::cout << "DirectX initialization failed!\n";
 		}
 
-		m_Camera = new Camera{};
-		m_Camera->Initialize(45.f, { 0,0,0.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
+		m_pCamera = std::make_unique<Camera>();
+		m_pCamera->Initialize(45.f, { 0,0,0.f }, static_cast<float>(m_Width) / static_cast<float>(m_Height));
 
 		PrintOutKeys();
 	}
 
 	Renderer::~Renderer()
 	{
-		delete m_pMesh;
-		delete m_Camera;
+		m_pFireMesh.reset();
+		m_pMesh.reset();
+		m_pCamera.reset();
+
 		m_pRenderTargetView->Release();
 		m_pRenderTargetBuffer->Release();
 		m_pDethStencilView->Release();
@@ -112,11 +66,13 @@ namespace dae {
 
 		m_pDevice->Release();
 
+		delete[] m_pDepthBufferPixels;
+
 	}
 
 	void Renderer::Update(const dae::Timer* pTimer)
 	{
-		m_Camera->Update(pTimer);
+		m_pCamera->Update(pTimer);
 		RotateMesh(pTimer->GetElapsed());
 	}
 
@@ -145,10 +101,10 @@ namespace dae {
 		m_pDeviceContext->ClearDepthStencilView(m_pDethStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.f, 0);
 
 
-		m_pMesh->Render_DirectX(m_pDeviceContext, m_Camera);
+		m_pMesh->Render_DirectX(m_pDeviceContext, m_pCamera.get());
 		if (m_RenderFireFX)
 		{
-			m_pFireMesh->Render_DirectX(m_pDeviceContext, m_Camera);
+			m_pFireMesh->Render_DirectX(m_pDeviceContext, m_pCamera.get());
 		}
 
 
@@ -159,69 +115,56 @@ namespace dae {
 	{
 		SDL_LockSurface(m_pBackBuffer);
 
-		dae::Matrix view{ m_Camera->invViewMatrix };
-		dae::Matrix proj{ m_Camera->ProjectionMatrix };
-
-
+		dae::Matrix view{ m_pCamera->invViewMatrix };
+		dae::Matrix proj{ m_pCamera->ProjectionMatrix };
 
 		dae::Frustum frustum;
 		ExtractFrustumPlanes(view * proj, frustum);
 
-		for (int px{ 0 }; px < m_Width; ++px)
-		{
-			for (int py{ 0 }; py < m_Height; ++py)
-			{
-				ColorRGB finalColor{ .39f, .39f, .39f };
-				if (m_ClearColor)
-				{
-					finalColor = { .1f, .1f, .1f };
-				}
+		const int allPixels{ m_Width * m_Height };
 
-				finalColor.MaxToOne();
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(finalColor.r * 255),
-					static_cast<uint8_t>(finalColor.g * 255),
-					static_cast<uint8_t>(finalColor.b * 255));
+		for (int pixelIndex{ 0 }; pixelIndex < allPixels; ++pixelIndex)
+		{
+			ColorRGB finalColor{ .39f, .39f, .39f };
+			if (m_ClearColor)
+			{
+				finalColor = { .1f, .1f, .1f };
 			}
+
+			finalColor.MaxToOne();
+
+			m_pBackBufferPixels[pixelIndex] = SDL_MapRGB(m_pBackBuffer->format,
+				static_cast<uint8_t>(finalColor.r * 255),
+				static_cast<uint8_t>(finalColor.g * 255),
+				static_cast<uint8_t>(finalColor.b * 255));
 		}
 
-		RenderMesh(m_pMesh);
-
-		if (m_RenderDepthBuffer)
+		RenderMesh(m_pMesh.get());
+	
+		for (int pixelIndex{ 0 }; pixelIndex < allPixels; ++pixelIndex)
 		{
-			for (int x{ 0 }; x < m_Width; ++x)
+			if (m_RenderDepthBuffer)
 			{
-				for (int y{ 0 }; y < m_Height; ++y)
+				const float depthValue{ m_pDepthBufferPixels[pixelIndex] };
+
+				if (depthValue <= 1)
 				{
-					const int pixel{ x + (y * m_Width) };
-					const float depthValue{ m_pDepthBufferPixels[pixel] };
+					float remappedDepth = Remap(depthValue, m_MinDepth, m_MaxDepth);
+					ColorRGB finalColor{ remappedDepth, remappedDepth, remappedDepth };
 
-					if (depthValue <= 1)
-					{
-						float remappedDepth = Remap(depthValue, m_MinDepth, m_MaxDepth);
-						ColorRGB finalColor{ remappedDepth, remappedDepth, remappedDepth };
-
-						finalColor.MaxToOne();
-						m_pBackBufferPixels[pixel] = SDL_MapRGB(m_pBackBuffer->format,
-							static_cast<uint8_t>(finalColor.r * 255),
-							static_cast<uint8_t>(finalColor.g * 255),
-							static_cast<uint8_t>(finalColor.b * 255));
-					}
+					finalColor.MaxToOne();
+					m_pBackBufferPixels[pixelIndex] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
 				}
 			}
 
-			m_MinDepth = FLT_MAX;
-			m_MaxDepth = 0;
+			m_pDepthBufferPixels[pixelIndex] = FLT_MAX;
 		}
 
-		for (int px{ 0 }; px < m_Width; ++px)
-		{
-			for (int py{ 0 }; py < m_Height; ++py)
-			{
-				m_pDepthBufferPixels[px + (py * m_Width)] = FLT_MAX;
-			}
-		}
-
+		m_MinDepth = FLT_MAX;
+		m_MaxDepth = 0;
 
 		SDL_UnlockSurface(m_pBackBuffer);
 		SDL_BlitSurface(m_pBackBuffer, 0, m_pFrontBuffer, 0);
@@ -440,8 +383,8 @@ namespace dae {
 		std::vector<uint32_t> indices(3);
 		std::vector<dae::Triangle> triangles{};
 
-		dae::Matrix view{ m_Camera->invViewMatrix };
-		dae::Matrix proj{ m_Camera->ProjectionMatrix };
+		dae::Matrix view{ m_pCamera->invViewMatrix };
+		dae::Matrix proj{ m_pCamera->ProjectionMatrix };
 		const dae::Matrix worldViewProjectionMatrix{ mesh->WorldMatrix * view * proj };
 
 		int increment = (mesh->m_PrimitiveTopology == dae::PrimitiveTopology::TriangleList) ? 3 : 1;
@@ -465,9 +408,8 @@ namespace dae {
 
 			// Transform vertices and cull
 			bool culling{ false };
-
-
 			VertexTransformationFunction(in, out, culling, mesh->WorldMatrix);
+
 			if (culling || out.size() != 3) continue;
 
 			triangles.emplace_back(dae::Triangle{ out });
@@ -481,10 +423,11 @@ namespace dae {
 
 	void Renderer::RenderTriangle(const std::vector<Vertex_Out>& vertices_ndc, const Mesh* pMesh)
 	{
-
+		// Creating X and Y position containers
 		const std::vector<float> xPositions{ vertices_ndc[0].position.x,vertices_ndc[1].position.x,vertices_ndc[2].position.x };
 		const std::vector<float> yPositions{ vertices_ndc[0].position.y,vertices_ndc[1].position.y,vertices_ndc[2].position.y };
 
+		// Bounding box caculations
 		float minX{ *std::min_element(xPositions.begin(), xPositions.end()) };
 		float minY{ *std::min_element(yPositions.begin(), yPositions.end()) };
 		minX = std::floor(std::max(0.f, minX));
@@ -495,12 +438,11 @@ namespace dae {
 		maxX = std::ceil(std::min((float)m_Width, maxX));
 		maxY = std::ceil(std::min((float)m_Height, maxY));
 
+		// Precaculating the area 
 		const Vector2 v0{ vertices_ndc[1].position.GetXY() - vertices_ndc[0].position.GetXY() };
 		const Vector2 v1{ vertices_ndc[2].position.GetXY() - vertices_ndc[0].position.GetXY() };
 
 		const float area{ std::fabs(Vector2::Cross(v0,v1)) };
-
-		const Vector3 up{ 0,0,1 };
 
 		float weights[3]{};
 
@@ -511,7 +453,7 @@ namespace dae {
 				uint32_t pixelIndex = px + py * m_Width;
 				if (!m_RenderBoundingBox)
 				{
-					PixelTriangleTest(pixelIndex, pMesh, vertices_ndc, up, area, minX, minY, maxX, maxY, weights);
+					PixelTriangleTest(pixelIndex, pMesh, vertices_ndc, area, weights);
 				}
 				else
 				{
@@ -529,10 +471,8 @@ namespace dae {
 		}
 	}
 
-	void Renderer::PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const Vector3& up, const float& area, float minX, float minY, float maxX, float maxY, float* weights)
+	void Renderer::PixelTriangleTest(uint32_t pixelIndex, const Mesh* pMesh, const std::vector<Vertex_Out>& vertices_ndc, const float& area, float* weights)
 	{
-		if (pixelIndex == -1) return;
-
 		ColorRGB finalColor{ .25f,.25f,.25f };
 
 		const int px{ (int)pixelIndex % m_Width };
@@ -551,21 +491,17 @@ namespace dae {
 		auto sin3{ Vector2::Cross(v0 - v2, point - v2) / area };
 
 		auto sum{ sin1 + sin2 + sin3 };
-		float eps = 1e-4;
 
-		bool isInNotTriangle{ !(std::abs(sum - 1) <= eps) && !(std::abs(sum + 1) <= eps) };
-
-		if (isInNotTriangle)
-		{
-			return;
-		}
+		//Triangle check if the point even is within the triangle
+		bool isInNotTriangle{ !(std::abs(sum - 1) <= EPS) && !(std::abs(sum + 1) <= EPS) };
+		if (isInNotTriangle) return;
 
 		weights[0] = sin1;
 		weights[1] = sin2;
 		weights[2] = sin3;
 
+		//Culling checking
 		bool culling{ false };
-
 		if (m_CullMode != None)
 		{
 			if (m_CullMode == Back)
@@ -585,14 +521,16 @@ namespace dae {
 
 		if (culling) return;
 
+		//Moving each weight to fit my design
 		weights[2] = std::abs(sin1);
 		weights[0] = std::abs(sin2);
 		weights[1] = std::abs(sin3);
 
+		//Depth caculation
 		float depth{ ((weights[0] / vertices_ndc[0].position.z) + (weights[1] / vertices_ndc[1].position.z) + (weights[2] / vertices_ndc[2].position.z)) };
 		depth = 1.f / depth;
 
-
+		//Making sure depth is within a valid range of [0,1]
 		if (m_pDepthBufferPixels[pixelIndex] < depth || (depth > 1 || depth < 0)) return;
 		m_pDepthBufferPixels[pixelIndex] = depth;
 
@@ -615,7 +553,6 @@ namespace dae {
 			w_interpolated = 1.f / w_interpolated;
 			caculated_uv *= w_interpolated;
 
-
 			Vector3 normal{};
 			Vector3 tangent{};
 			Vector3 viewDirection{};
@@ -631,8 +568,6 @@ namespace dae {
 			const Vertex_Out pixelVertex{ {},caculated_uv,normal.Normalized(),tangent.Normalized() };
 
 			finalColor = PixelShading(pixelVertex, viewDirection.Normalized(), sampledColor, pMesh);
-
-
 		}
 
 		finalColor.MaxToOne();
@@ -734,9 +669,9 @@ namespace dae {
 	void Renderer::VertexTransformationFunction(const std::vector<Vertex_In>& vertices_in, std::vector<Vertex_Out>& vertices_out, bool& culling, const Matrix& worldMatrix) const
 	{
 		const float aspectRatio{ (float)m_Width / m_Height };
-		const Matrix projM{ m_Camera->ProjectionMatrix };
+		const Matrix projM{ m_pCamera->ProjectionMatrix };
 
-		const Matrix m{ worldMatrix * m_Camera->invViewMatrix * projM };
+		const Matrix m{ worldMatrix * m_pCamera->invViewMatrix * projM };
 
 		Frustum frustum;
 		ExtractFrustumPlanes(m, frustum);
@@ -765,13 +700,12 @@ namespace dae {
 			newVertex.position.z = transformedPosition.z;                       // NDC Depth (0 to 1)
 			newVertex.position.w = transformedPosition.w;
 
-			newVertex.viewDirection = (worldMatrix.TransformPoint(vertex.position) - m_Camera->origin).Normalized();
+			newVertex.viewDirection = (worldMatrix.TransformPoint(vertex.position) - m_pCamera->origin).Normalized();
 
 			// Pass additional attributes (UVs, color, etc.)
 			newVertex.uv = vertex.uv;
 			newVertex.normal = worldMatrix.TransformVector(vertex.normal).Normalized();
 			newVertex.tangent = worldMatrix.TransformVector(vertex.tangent).Normalized();
-
 
 			vertices_out.emplace_back(newVertex);
 		}
@@ -781,7 +715,7 @@ namespace dae {
 
 	ColorRGB Renderer::GetDiffuse(const ColorRGB& sampledColor) const
 	{
-		return ((m_LightIntensity * sampledColor) / M_PI);
+		return ((m_LightIntensity * sampledColor) / static_cast<int>(M_PI));
 	}
 
 	ColorRGB Renderer::GetSpecular(const Vertex_Out& vertex, const Vector3& normal, const Vector3& viewDirection, const Mesh* pMesh) const
@@ -797,6 +731,54 @@ namespace dae {
 		const float specReflection{ std::pow(angle, glossiness) };
 
 		return specularColor * specReflection;
+	}
+
+	void Renderer::CreateMeshes()
+	{
+		std::vector<Vertex_In> vertices;
+		std::vector<uint32_t> indices;
+		Utils::ParseOBJ("resources/vehicle.obj", vertices, indices);
+
+		std::string texturePaths[4]
+		{
+			"resources/vehicle_diffuse.png",
+			"resources/vehicle_normal.png",
+			"resources/vehicle_specular.png",
+			"resources/vehicle_gloss.png",
+		};
+
+		m_pMesh = std::make_unique<Mesh>(
+			m_pDevice,
+			vertices,
+			indices,
+			texturePaths,
+			false,
+			new OpaqueEffect{ Effect::LoadEffect(m_pDevice,L"resources/PosCol3D.fx") ,m_pDevice,vertices,indices }
+		);
+
+		m_pMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
+
+		std::vector<Vertex_In> fireVertices;
+		std::vector<uint32_t> fireIndices;
+
+		Utils::ParseOBJ("resources/fireFX.obj", fireVertices, fireIndices);
+
+		std::string fireTexturePaths[1]
+		{
+			"resources/fireFX_diffuse.png"
+		};
+
+		m_pFireMesh = std::make_unique<Mesh>(
+
+			m_pDevice,
+			fireVertices,
+			fireIndices,
+			fireTexturePaths,
+			true,
+			new TransparentEffect{ Effect::LoadEffect(m_pDevice,L"resources/Transparent.fx") ,m_pDevice,fireVertices,fireIndices }
+		);
+
+		m_pFireMesh->WorldMatrix = Matrix::CreateTranslation({ 0,0,50 });
 	}
 
 	void Renderer::RotateMesh(float elapsedSec)
