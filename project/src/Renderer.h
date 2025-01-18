@@ -97,7 +97,7 @@ namespace dae
 
 		//Shared Settings
 		RenderMethod m_RenderMethod{ RenderMethod::DirectX };
-		bool m_VehicleRotation{ false };
+		bool m_VehicleRotation{ true };
 		CullMode m_CullMode{ CullMode::Back };
 		bool m_ClearColor{ false };
 
